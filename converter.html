@@ -1,14 +1,374 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#151a2d">
+<title>ESNS Unit Converter</title>
+<style>
+:root {
+  color-scheme: dark;
+  font-family: system-ui, sans-serif;
+  background: #101321;
+  color: #f2f4ff;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 24px 16px;
+}
+main {
+  max-width: 760px;
+  margin: 0 auto;
+}
+header, section {
+  background: #1a2035;
+  border: 1px solid #333d5d;
+  border-radius: 16px;
+  padding: 22px;
+  margin-bottom: 18px;
+}
+h1 { margin: 0 0 8px; font-size: 2rem; }
+h2 { font-size: 1.15rem; }
+p { line-height: 1.6; color: #c1c9e4; }
+label {
+  display: block;
+  font-weight: 650;
+  margin: 16px 0 7px;
+}
+input, select, button {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #465274;
+  border-radius: 9px;
+  background: #11172a;
+  color: #fff;
+  font: inherit;
+}
+button {
+  cursor: pointer;
+  background: #758aff;
+  color: #10152a;
+  font-weight: 750;
+  border: 0;
+  margin-top: 16px;
+}
+button:hover { filter: brightness(1.1); }
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.result {
+  overflow-wrap: anywhere;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #b9c8ff;
+}
+small { color: #aab5d4; }
+footer { text-align: center; padding: 10px; }
+@media(max-width: 520px) {
+  .grid { grid-template-columns: 1fr; gap: 0; }
+  header, section { padding: 16px; }
+}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>ESNS Unit Converter</h1>
+  <p>Extended+ Storage Naming System</p>
+  <p>Convert between information and storage units defined in the ESNS catalog.</p>
+</header>
 
+<section>
+  <label for="amount">Amount</label>
+  <input id="amount" type="text" inputmode="decimal" value="1"
+         autocomplete="off" spellcheck="false">
 
-  
-  
-  ESNS Unit Converter
+  <div class="grid">
+    <div>
+      <label for="from">Convert from</label>
+      <select id="from"></select>
+    </div>
+    <div>
+      <label for="to">Convert to</label>
+      <select id="to"></select>
+    </div>
+  </div>
 
+  <button id="swap" type="button">Swap units</button>
+  <button id="convert" type="button">Convert</button>
 
-  ESNS Unit Converter
-  Experimental reference tool for the Extended+ Storage Naming System.
-  Conversion rules must match the published ESNS specification.
-  This tool is under development.
+  <h2>Result</h2>
+  <div id="result" class="result" aria-live="polite">1 byte = 8 bits</div>
+  <p id="details"></p>
+  <small>Calculations use exact integer ratios. Decimal results are rounded to at most 12 places after the decimal point.</small>
+</section>
 
+<section>
+  <h2>About ESNS</h2>
+  <p>This converter is a reference implementation for the Extended+ Storage Naming System. It includes standard information units and proposed ESNS units.</p>
+  <p>For authoritative definitions, consult the published ESNS Specification v1.0 in the project repository.</p>
+</section>
 
+<footer><small>ESNS Unit Converter · Version 1.0</small></footer>
+</main>
+
+<script>
+"use strict";
+
+/*
+ * Each unit is represented as an exact rational number of bits:
+ * [unit name, numerator, denominator].
+ * No floating-point arithmetic is used for conversions.
+ */
+const units = [];
+
+function add(name, numerator, denominator = 1n) {
+  units.push([name, BigInt(numerator), BigInt(denominator)]);
+}
+
+function power(base, exponent) {
+  return BigInt(base) ** BigInt(exponent);
+}
+
+function addPair(name, bitValue) {
+  add(name, bitValue);
+  add(name + " (byte equivalent)", bitValue * 8n);
+}
+
+// Fractional units
+add("millibit", 1n, 1000n);
+add("millibyte", 8n, 1000n);
+add("centibit", 1n, 100n);
+add("centibyte", 8n, 100n);
+add("decibit", 1n, 10n);
+add("decibyte", 8n, 10n);
+
+// Base units
+add("bit", 1n);
+add("byte", 8n);
+add("nibble", 4n);
+add("bite", 400n);
+add("chomp", 4000n);
+
+// Custom decimal units: bitte and byt
+add("bitte", 100n);
+add("kilobitte", 100n * power(10, 3));
+add("megabitte", 100n * power(10, 6));
+add("gigabitte", 100n * power(10, 9));
+add("terabitte", 100n * power(10, 12));
+add("petabitte", 100n * power(10, 15));
+add("exabitte", 100n * power(10, 18));
+
+add("byt", 800n);
+add("kilobyt", 800n * power(10, 3));
+add("megabyt", 800n * power(10, 6));
+add("gigabyt", 800n * power(10, 9));
+add("terabyt", 800n * power(10, 12));
+add("petabyt", 800n * power(10, 15));
+add("exabyt", 800n * power(10, 18));
+
+// Standard decimal units
+for (const [prefix, exponent] of [
+  ["kilo", 3], ["mega", 6], ["giga", 9],
+  ["tera", 12], ["peta", 15], ["exa", 18],
+  ["zetta", 21], ["yotta", 24]
+]) {
+  const value = power(10, exponent);
+  add(prefix + "bit", value);
+  add(prefix + "byte", value * 8n);
+}
+
+// Binary units, including extended prefixes
+for (const [prefix, exponent] of [
+  ["kibi", 1], ["mebi", 2], [" gibi", 3],
+  ["tebi", 4], ["pebi", 5], ["exbi", 6],
+  ["zebi", 7], ["yobi", 8]
+]) {
+  const cleanPrefix = prefix.trim();
+  const value = power(1024, exponent);
+  add(cleanPrefix + "bit", value);
+  add(cleanPrefix + "byte", value * 8n);
+}
+
+// Tower units: one tower is 9000 bytes.
+// Larger tower units scale by decimal powers of 1000.
+add("tower", 9000n * 8n);
+for (const [prefix, exponent] of [
+  ["kilo", 3], ["mega", 6], ["giga", 9],
+  ["tera", 12], ["peta", 15], ["exa", 18]
+]) {
+  add(prefix + "tower", 9000n * 8n * power(10, exponent));
+}
+
+// Extended decimal units
+add("milennian", power(10, 23) * 8n);
+add("billennian", power(10, 26) * 8n);
+add("rontobit", power(10, 27));
+add("rontobyte", power(10, 27) * 8n);
+add("quettabit", power(10, 30));
+add("quettabyte", power(10, 30) * 8n);
+add("trebabit", power(10, 33));
+add("treababyte", power(10, 33) * 8n);
+add("trillenian", power(10, 29) * 8n);
+add("quadrillenian", power(10, 32) * 8n);
+
+// Extended binary units
+const yobiBit = power(1024, 8);
+const robiBit = yobiBit * 1024n;
+const quettiBit = robiBit * 1024n;
+const trebiBit = quettiBit * 1024n;
+
+add("robibit", robiBit);
+add("robibyte", robiBit * 8n);
+add("quettibit", quettiBit);
+add("quettibyte", quettiBit * 8n);
+add("trebibit", trebiBit);
+add("trebibyte", trebiBit * 8n);
+
+// Ceti and centa units
+add("cetibit", power(2, 100));
+add("cetibyte", power(2, 100) * 8n);
+add("centabit", power(10, 100));
+add("centabyte", power(10, 100) * 8n);
+
+const amountInput = document.getElementById("amount");
+const fromSelect = document.getElementById("from");
+const toSelect = document.getElementById("to");
+const result = document.getElementById("result");
+const details = document.getElementById("details");
+
+function gcd(a, b) {
+  while (b !== 0n) {
+    const r = a % b;
+    a = b;
+    b = r;
+  }
+  return a;
+}
+
+function rational(n, d = 1n) {
+  if (d < 0n) {
+    n = -n;
+    d = -d;
+  }
+  const g = gcd(n < 0n ? -n : n, d);
+  return [n / g, d / g];
+}
+
+function parseDecimal(value) {
+  const s = value.trim().replace(/,/g, "");
+  const match = /^([+-]?)(\d+)(?:\.(\d*))?$/.exec(s);
+  if (!match) {
+    throw new Error("Enter a number such as 12, 0.5, or 123.75.");
+  }
+  const sign = match[1] === "-" ? -1n : 1n;
+  const fraction = match[3] || "";
+  const denominator = power(10, fraction.length);
+  const numerator = BigInt(match[2] + fraction) * sign;
+  return rational(numerator, denominator);
+}
+
+function multiply(a, b) {
+  return rational(a[0] * b[0], a[1] * b[1]);
+}
+
+function divide(a, b) {
+  if (b[0] === 0n) throw new Error("Cannot divide by zero.");
+  return rational(a[0] * b[1], a[1] * b[0]);
+}
+
+function formatDecimal(value, places = 12) {
+  const negative = value[0] < 0n;
+  const n = negative ? -value[0] : value[0];
+  const d = value[1];
+  const whole = n / d;
+  const remainder = n % d;
+
+  if (remainder === 0n) {
+    return (negative ? "-" : "") + whole.toString();
+  }
+
+  const scale = power(10, places);
+  let fractional = (remainder * scale * 2n + d) / (2n * d);
+  let integerPart = whole;
+
+  if (fractional >= scale) {
+    integerPart += fractional / scale;
+    fractional %= scale;
+  }
+
+  let decimal = fractional.toString().padStart(places, "0");
+  decimal = decimal.replace(/0+$/, "");
+
+  return (negative ? "-" : "") +
+    integerPart.toString() + (decimal ? "." + decimal : "");
+}
+
+function unitLabel(unit) {
+  return unit[0];
+}
+
+function populate(select) {
+  units.forEach((unit, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = unitLabel(unit);
+    select.appendChild(option);
+  });
+}
+
+populate(fromSelect);
+populate(toSelect);
+
+fromSelect.value = String(units.findIndex(u => u[0] === "byte"));
+toSelect.value = String(units.findIndex(u => u[0] === "bit"));
+
+function convert() {
+  try {
+    const amount = parseDecimal(amountInput.value);
+
+    if (amount[0] < 0n) {
+      throw new Error("Enter a non-negative amount.");
+    }
+
+    const source = units[Number(fromSelect.value)];
+    const target = units[Number(toSelect.value)];
+
+    const inBits = multiply(amount, rational(source[1], source[2]));
+    const answer = divide(inBits, rational(target[1], target[2]));
+
+    result.textContent =
+      amountInput.value + " " + source[0] + " = " +
+      formatDecimal(answer) + " " + target[0];
+
+    details.textContent =
+      "Exact result: " + answer[0].toString() +
+      (answer[1] === 1n ? "" : " / " + answer[1].toString()) +
+      " target units.";
+  } catch (error) {
+    result.textContent = error.message;
+    details.textContent = "";
+  }
+}
+
+document.getElementById("convert").addEventListener("click", convert);
+
+document.getElementById("swap").addEventListener("click", () => {
+  const oldFrom = fromSelect.value;
+  fromSelect.value = toSelect.value;
+  toSelect.value = oldFrom;
+  convert();
+});
+
+amountInput.addEventListener("input", convert);
+fromSelect.addEventListener("change", convert);
+toSelect.addEventListener("change", convert);
+
+convert();
+</script>
+</body>
+</html>
